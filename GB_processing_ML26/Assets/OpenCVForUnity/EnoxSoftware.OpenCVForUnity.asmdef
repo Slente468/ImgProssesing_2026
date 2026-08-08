@@ -1,7 +1,9 @@
 {
   "name": "EnoxSoftware.OpenCVForUnity",
   "rootNamespace": "",
-  "references": [],
+  "references": [
+    "Unity.InferenceEngine"
+  ],
   "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": true,
@@ -9,6 +11,12 @@
   "precompiledReferences": [],
   "autoReferenced": true,
   "defineConstraints": [],
-  "versionDefines": [],
+  "versionDefines": [
+    {
+      "name": "com.unity.ai.inference",
+      "expression": "2.6.1",
+      "define": "OPENCV_SENTIS_AVAILABLE"
+    }
+  ],
   "noEngineReferences": false
 }

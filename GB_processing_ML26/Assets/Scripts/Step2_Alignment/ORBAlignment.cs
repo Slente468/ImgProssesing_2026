@@ -12,13 +12,17 @@ public class ORBAlignment : MonoBehaviour
     public Texture2D videoFrame;
     public RawImage displayImage;
 
-    void Start()
-    {
-        if (primeImage != null && videoFrame != null)
-            AlignImages();
-        else
-            Debug.LogWarning("Prime image or video frame not assigned.");
-    }
+   void Start()
+{
+    // Don't auto-align on Start—wait for SetVideoFrame() to be called
+    // Just check that primeImage is assigned
+    if (primeImage == null)
+        Debug.LogWarning("Prime image not assigned in ORBAlignment!");
+
+    // Remove the auto-align call to prevent the warning
+    // if (primeImage != null && videoFrame != null)
+    //     AlignImages();
+}
 
     public void AlignImages()
     {

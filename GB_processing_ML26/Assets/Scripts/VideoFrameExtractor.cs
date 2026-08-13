@@ -17,7 +17,7 @@ public class VideoFrameExtractor : MonoBehaviour
 
     private VideoPlayer videoPlayer;
     private RenderTexture renderTexture;
-    private System.Action<Texture2D> onFrameReadyCallback;
+    private bool isFrameReady = false;
 
     void Start()
     {
@@ -39,71 +39,111 @@ public class VideoFrameExtractor : MonoBehaviour
         videoPlayer.isLooping = false;
         videoPlayer.waitForFirstFrame = true;
 
-        // Create RenderTexture - SET PROPERTIES FIRST
+        // Create RenderTexture
         renderTexture = new RenderTexture(targetWidth, targetHeight, 0, RenderTextureFormat.ARGB32);
-        renderTexture.useMipMap = false; // Set BEFORE Create()
-        renderTexture.Create(); // Now create it
-        
+        renderTexture.useMipMap = false;
+        renderTexture.Create();
+
         videoPlayer.targetTexture = renderTexture;
         videoPlayer.renderMode = VideoRenderMode.RenderTexture;
 
         videoPlayer.Prepare();
-        videoPlayer.prepareCompleted += OnVideoPrepared;
-    }
-
-    void OnVideoPrepared(VideoPlayer vp)
-    {
-        Debug.Log("Video prepared. Frame count: " + vp.frameCount);
+        
+        // Don't rely on prepareCompleted—just start
         videoPlayer.Play();
-        videoPlayer.sendFrameReadyEvents = true;
-        videoPlayer.frameReady += OnFrameReady;
+        Debug.Log("VideoPlayer started. Waiting for first frame...");
     }
 
-    void OnFrameReady(VideoPlayer vp, long frameIdx)
+    /// <summary>
+    /// Manually extract the first frame by polling.
+    /// </summary>
+    public IEnumerator GetFirstFrameCoroutine(System.Action<Texture2D> callback)
     {
-        RenderTexture.active = renderTexture;
+        Debug.Log("GetFirstFrameCoroutine started. Polling for first frame...");
 
-        if (currentFrame == null || currentFrame.width != targetWidth || currentFrame.height != targetHeight)
+        int waitCount = 0;
+        int maxWait = 300; // ~10 seconds at 30fps
+
+        while (waitCount < maxWait)
         {
-            currentFrame = new Texture2D(targetWidth, targetHeight, TextureFormat.ARGB32, false);
+            waitCount++;
+
+            // Check if the video is playing and has rendered a frame
+            if (videoPlayer.isPlaying && videoPlayer.texture != null)
+            {
+                // Give it one more frame to render properly
+                yield return new WaitForEndOfFrame();
+                
+                // Capture the frame
+                RenderTexture.active = renderTexture;
+
+                if (currentFrame == null || currentFrame.width != targetWidth || currentFrame.height != targetHeight)
+                {
+                    currentFrame = new Texture2D(targetWidth, targetHeight, TextureFormat.ARGB32, false);
+                }
+
+                currentFrame.ReadPixels(new Rect(0, 0, targetWidth, targetHeight), 0, 0);
+                currentFrame.Apply();
+
+                RenderTexture.active = null;
+
+                // Show preview
+                if (previewImage != null)
+                {
+                    previewImage.texture = currentFrame;
+                }
+
+                // Pause the video after capturing the first frame
+                videoPlayer.Pause();
+                Debug.Log("First frame captured: " + currentFrame.width + "x" + currentFrame.height);
+
+                callback?.Invoke(currentFrame);
+                yield break;
+            }
+
+            // Debug every 50 frames
+            if (waitCount % 50 == 0)
+                Debug.Log("Waiting for first frame... (" + waitCount + "/" + maxWait + ")");
+
+            yield return new WaitForEndOfFrame();
         }
 
-        currentFrame.ReadPixels(new Rect(0, 0, targetWidth, targetHeight), 0, 0);
-        currentFrame.Apply();
+        // If we get here, we timed out
+        Debug.LogError("Timed out waiting for first frame after " + maxWait + " frames!");
 
-        RenderTexture.active = null;
-
-        if (previewImage != null)
+        // Fallback: try to capture whatever is in the RenderTexture
+        if (renderTexture != null)
         {
-            previewImage.texture = currentFrame;
+            Debug.Log("Attempting fallback capture...");
+            RenderTexture.active = renderTexture;
+
+            if (currentFrame == null || currentFrame.width != targetWidth || currentFrame.height != targetHeight)
+            {
+                currentFrame = new Texture2D(targetWidth, targetHeight, TextureFormat.ARGB32, false);
+            }
+
+            currentFrame.ReadPixels(new Rect(0, 0, targetWidth, targetHeight), 0, 0);
+            currentFrame.Apply();
+
+            RenderTexture.active = null;
+
+            if (previewImage != null)
+            {
+                previewImage.texture = currentFrame;
+            }
+
+            Debug.Log("Fallback capture complete.");
+            callback?.Invoke(currentFrame);
         }
-
-        // Pause after first frame to see preview
-        if (frameIdx == 0)
+        else
         {
-            vp.Pause();
-            Debug.Log("Video paused after first frame. Click Play in the VideoPlayer Inspector to continue.");
-        }
-
-        if (onFrameReadyCallback != null)
-        {
-            onFrameReadyCallback.Invoke(currentFrame);
+            callback?.Invoke(null);
         }
     }
 
     public Texture2D GetCurrentFrame()
     {
         return currentFrame;
-    }
-
-    public void GetNextFrame(System.Action<Texture2D> callback)
-    {
-        if (videoPlayer == null || !videoPlayer.isPlaying)
-        {
-            Debug.LogWarning("VideoPlayer is not playing.");
-            return;
-        }
-        onFrameReadyCallback = callback;
     }
 
     public long GetTotalFrameCount()
@@ -114,12 +154,23 @@ public class VideoFrameExtractor : MonoBehaviour
             return 0;
     }
 
+    public void Play()
+    {
+        if (videoPlayer != null)
+            videoPlayer.Play();
+    }
+
+    public void Pause()
+    {
+        if (videoPlayer != null)
+            videoPlayer.Pause();
+    }
+
     void OnDestroy()
     {
         if (videoPlayer != null)
         {
-            videoPlayer.frameReady -= OnFrameReady;
-            videoPlayer.prepareCompleted -= OnVideoPrepared;
+            videoPlayer.Stop();
         }
         if (renderTexture != null)
             renderTexture.Release();

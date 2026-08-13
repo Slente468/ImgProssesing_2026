@@ -6,96 +6,85 @@ public class VideoAlignmentController : MonoBehaviour
     [Header("References")]
     public VideoFrameExtractor frameExtractor;
     public ORBAlignment orbAlignment;
-    
+
     [Header("Settings")]
     public bool autoProcess = true;
-    public float frameDelay = 0.1f;
 
     private bool isProcessing = false;
 
     void Start()
     {
+        Debug.Log("VideoAlignmentController Start() called!");
         if (autoProcess)
             StartProcessing();
-            Debug.Log("VideoAlignmentController Start() called!");
-    
     }
 
-   public void StartProcessing()
-{
-    Debug.Log("StartProcessing() called!");
-    
-    if (frameExtractor == null)
+    public void StartProcessing()
     {
-        Debug.LogError("Frame Extractor is null! Did you assign it in the Inspector?");
-        return;
-    }
-    
-    if (orbAlignment == null)
-    {
-        Debug.LogError("ORB Alignment is null! Did you assign it in the Inspector?");
-        return;
-    }
-    
-    Debug.Log("Both references are assigned. Starting coroutine...");
-    
-    if (isProcessing)
-        return;
+        Debug.Log("StartProcessing() called!");
 
-    isProcessing = true;
-    StartCoroutine(ProcessVideo());
-}
+        if (frameExtractor == null)
+        {
+            Debug.LogError("Frame Extractor is null! Did you assign it in the Inspector?");
+            return;
+        }
+
+        if (orbAlignment == null)
+        {
+            Debug.LogError("ORB Alignment is null! Did you assign it in the Inspector?");
+            return;
+        }
+
+        Debug.Log("Both references are assigned. Starting...");
+
+        if (isProcessing)
+            return;
+
+        isProcessing = true;
+        StartCoroutine(ProcessVideo());
+    }
 
     IEnumerator ProcessVideo()
     {
-        Debug.Log("Starting video processing...");
+        Debug.Log("ProcessVideo() started.");
 
-        // Step 1: Extract the first frame
+        // Start extracting (this prepares the video)
         frameExtractor.StartExtracting();
-        
-        // Wait for the first frame to be ready
-        int waitCount = 0;
-        while (frameExtractor.GetCurrentFrame() == null)
-        {
-            waitCount++;
-            if (waitCount > 100) // Timeout after ~3 seconds
-            {
-                Debug.LogError("Timed out waiting for first frame!");
-                isProcessing = false;
-                yield break;
-            }
-            yield return new WaitForEndOfFrame();
-        }
+        Debug.Log("StartExtracting() called. Waiting for first frame...");
 
-        Texture2D firstFrame = frameExtractor.GetCurrentFrame();
-        Debug.Log("First frame extracted: " + firstFrame.width + "x" + firstFrame.height);
+        // Get the first frame using the new coroutine
+        Texture2D firstFrame = null;
+        yield return StartCoroutine(frameExtractor.GetFirstFrameCoroutine((frame) => {
+            firstFrame = frame;
+        }));
 
-        // Step 2: Check if the first frame has content
         if (firstFrame == null)
         {
-            Debug.LogError("First frame is null!");
+            Debug.LogError("Failed to get first frame!");
             isProcessing = false;
             yield break;
         }
 
-        // Step 3: Log the prime image
+        Debug.Log("First frame acquired: " + firstFrame.width + "x" + firstFrame.height);
+
+        // Check the prime image
         if (orbAlignment.primeImage == null)
         {
             Debug.LogError("Prime image is not assigned in ORBAlignment!");
             isProcessing = false;
             yield break;
         }
+
         Debug.Log("Prime image: " + orbAlignment.primeImage.width + "x" + orbAlignment.primeImage.height);
 
-        // Step 4: Align the first frame
-        Debug.Log("Calling SetVideoFrame...");
+        // Assign the frame to ORBAlignment
+        Debug.Log("Calling SetVideoFrame() with first frame...");
         orbAlignment.SetVideoFrame(firstFrame);
-        
+
         // Wait a moment for alignment to complete
         yield return new WaitForEndOfFrame();
 
-        Debug.Log("Video processing complete.");
+        Debug.Log("Video processing complete (Step 1 & 2 done). Ready for Step 3.");
         isProcessing = false;
     }
 }
-

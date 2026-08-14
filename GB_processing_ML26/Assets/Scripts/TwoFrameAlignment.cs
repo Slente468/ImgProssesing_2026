@@ -10,14 +10,13 @@ public class TwoFrameAlignment : MonoBehaviour
     public Texture2D lastFrame;
 
     [Header("Display")]
-    public RawImage resultImage;
+    public RawImage resultImage;        // Final mask
+    public RawImage debugFirstImage;    // NEW: Show warped first frame
+    public RawImage debugLastImage;     // NEW: Show warped last frame
 
     [Header("Settings")]
     public float subtractionThreshold = 0.1f;
 
-    // ============================================================
-    // ADD THIS: Auto-start when the scene loads
-    // ============================================================
     void Start()
     {
         Debug.Log("TwoFrameAlignment Start() called!");
@@ -40,7 +39,7 @@ public class TwoFrameAlignment : MonoBehaviour
 
         Debug.Log("Starting Two-Frame Alignment...");
 
-        // Step 1: Align FIRST frame independently
+        // Align FIRST frame
         Debug.Log("Aligning first frame...");
         Texture2D warpedFirst = orbAlignment.AlignAndReturnTexture(firstFrame, true);
         if (warpedFirst == null)
@@ -49,7 +48,11 @@ public class TwoFrameAlignment : MonoBehaviour
             return;
         }
 
-        // Step 2: Align LAST frame independently
+        // Show warped first frame for debugging
+        if (debugFirstImage != null)
+            debugFirstImage.texture = warpedFirst;
+
+        // Align LAST frame
         Debug.Log("Aligning last frame...");
         Texture2D warpedLast = orbAlignment.AlignAndReturnTexture(lastFrame, true);
         if (warpedLast == null)
@@ -58,17 +61,18 @@ public class TwoFrameAlignment : MonoBehaviour
             return;
         }
 
-        // Step 3: Both frames are now 800x767 and aligned. Subtract them.
+        // Show warped last frame for debugging
+        if (debugLastImage != null)
+            debugLastImage.texture = warpedLast;
+
+        // Subtract
         Debug.Log("Subtracting images...");
         Texture2D drawingMask = SubtractImages(warpedFirst, warpedLast);
 
-        // Step 4: Display the result
         if (resultImage != null)
-        {
             resultImage.texture = drawingMask;
-        }
 
-        Debug.Log("Two-Frame Alignment complete! Drawing mask ready.");
+        Debug.Log("Two-Frame Alignment complete!");
     }
 
     private Texture2D SubtractImages(Texture2D clean, Texture2D drawn)
@@ -94,11 +98,5 @@ public class TwoFrameAlignment : MonoBehaviour
         mask.SetPixels(maskPixels);
         mask.Apply();
         return mask;
-    }
-
-    // Optional: Manual start method if you want to call it from elsewhere
-    public void StartProcessing()
-    {
-        ProcessFrames();
     }
 }

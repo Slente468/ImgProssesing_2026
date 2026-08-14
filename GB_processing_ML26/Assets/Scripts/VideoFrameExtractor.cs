@@ -1,8 +1,8 @@
-using UnityEngine;
+ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Video;
 using System.Collections;
-
+/*
 public class VideoFrameExtractor : MonoBehaviour
 {
     [Header("Video Settings")]
@@ -177,4 +177,4 @@ public class VideoFrameExtractor : MonoBehaviour
         if (currentFrame != null)
             Destroy(currentFrame);
     }
-}
+}*/

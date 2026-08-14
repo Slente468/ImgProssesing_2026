@@ -1,4 +1,4 @@
-using UnityEngine;
+/*using UnityEngine;
 using System.Collections;
 
 public class TestAlignmentWithVideo : MonoBehaviour
@@ -40,4 +40,4 @@ public class TestAlignmentWithVideo : MonoBehaviour
             Debug.LogWarning("ORBAlignment script not assigned.");
         }
     }
-}
+}*/

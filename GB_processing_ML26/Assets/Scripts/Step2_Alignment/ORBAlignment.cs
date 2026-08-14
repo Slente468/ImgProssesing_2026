@@ -12,18 +12,15 @@ public class ORBAlignment : MonoBehaviour
     public Texture2D videoFrame;
     public RawImage displayImage;
 
-   void Start()
-{
-    // Don't auto-align on Start—wait for SetVideoFrame() to be called
-    // Just check that primeImage is assigned
-    if (primeImage == null)
-        Debug.LogWarning("Prime image not assigned in ORBAlignment!");
+    void Start()
+    {
+        if (primeImage == null)
+            Debug.LogWarning("Prime image not assigned in ORBAlignment!");
+    }
 
-    // Remove the auto-align call to prevent the warning
-    // if (primeImage != null && videoFrame != null)
-    //     AlignImages();
-}
-
+    // ============================================================
+    // ORIGINAL METHOD: Aligns and displays the result
+    // ============================================================
     public void AlignImages()
     {
         if (primeImage == null || videoFrame == null)
@@ -32,14 +29,73 @@ public class ORBAlignment : MonoBehaviour
             return;
         }
 
-        // Convert using our own converter (no Utils dependency)
+        Texture2D result = PerformAlignment(videoFrame);
+        
+        if (result != null && displayImage != null)
+        {
+            displayImage.texture = result;
+            Debug.Log("Alignment complete! Display updated.");
+        }
+    }
+
+    // ============================================================
+    // PUBLIC: Aligns and returns the result (preserves display)
+    // ============================================================
+    public Texture2D AlignAndReturnTexture(Texture2D inputFrame, bool preserveDisplay = false)
+    {
+        if (inputFrame == null)
+        {
+            Debug.LogError("Input frame is null!");
+            return null;
+        }
+
+        // Save current display texture
+        Texture2D savedDisplay = null;
+        if (displayImage != null && displayImage.texture != null)
+        {
+            // Try to safely get the current texture
+            if (displayImage.texture is Texture2D)
+                savedDisplay = (Texture2D)displayImage.texture;
+        }
+
+        // Run alignment
+        Texture2D result = PerformAlignment(inputFrame);
+
+        // Restore display if requested
+        if (preserveDisplay && displayImage != null)
+        {
+            displayImage.texture = savedDisplay;
+        }
+        else if (!preserveDisplay && displayImage != null && result != null)
+        {
+            // If not preserving, update the display with the result
+            displayImage.texture = result;
+        }
+
+        return result;
+    }
+
+    // ============================================================
+    // CORE ALIGNMENT: Returns a Texture2D directly
+    // ============================================================
+    private Texture2D PerformAlignment(Texture2D inputFrame)
+    {
+        if (inputFrame == null || primeImage == null)
+        {
+            Debug.LogError("Prime image or input frame is null!");
+            return null;
+        }
+
+        Debug.Log("Starting alignment...");
+
+        // Convert using our own converter
         Mat primeMat = Texture2DMatConverter.Texture2DToMat(primeImage);
-        Mat frameMat = Texture2DMatConverter.Texture2DToMat(videoFrame);
+        Mat frameMat = Texture2DMatConverter.Texture2DToMat(inputFrame);
 
         if (primeMat == null || frameMat == null)
         {
             Debug.LogError("Failed to convert textures to Mats!");
-            return;
+            return null;
         }
 
         // Convert to grayscale
@@ -48,56 +104,46 @@ public class ORBAlignment : MonoBehaviour
         Imgproc.cvtColor(primeMat, primeGray, Imgproc.COLOR_BGR2GRAY);
         Imgproc.cvtColor(frameMat, frameGray, Imgproc.COLOR_BGR2GRAY);
 
-     // Replace this ORB code:
-     // ORB feature detector
-     // ORB orb = ORB.create();
-     // MatOfKeyPoint keypointsPrime = new MatOfKeyPoint();
-      // MatOfKeyPoint keypointsFrame = new MatOfKeyPoint();
-     // Mat descriptorsPrime = new Mat();
-     // Mat descriptorsFrame = new Mat();
-     // orb.detectAndCompute(primeGray, new Mat(), keypointsPrime, descriptorsPrime);
-     // orb.detectAndCompute(frameGray, new Mat(), keypointsFrame, descriptorsFrame);
+        // AKAZE feature detector
+        AKAZE akaze = AKAZE.create();
+        MatOfKeyPoint keypointsPrime = new MatOfKeyPoint();
+        MatOfKeyPoint keypointsFrame = new MatOfKeyPoint();
+        Mat descriptorsPrime = new Mat();
+        Mat descriptorsFrame = new Mat();
 
-     // With AKAZE:
-     AKAZE akaze = AKAZE.create();
-     MatOfKeyPoint keypointsPrime = new MatOfKeyPoint();
-     MatOfKeyPoint keypointsFrame = new MatOfKeyPoint();
-     Mat descriptorsPrime = new Mat();
-     Mat descriptorsFrame = new Mat();
+        akaze.detectAndCompute(primeGray, new Mat(), keypointsPrime, descriptorsPrime);
+        akaze.detectAndCompute(frameGray, new Mat(), keypointsFrame, descriptorsFrame);
 
-     akaze.detectAndCompute(primeGray, new Mat(), keypointsPrime, descriptorsPrime);
-     akaze.detectAndCompute(frameGray, new Mat(), keypointsFrame, descriptorsFrame);
-        
-   
         // Check if enough keypoints found
-        if (keypointsPrime.toArray().Length < 4 || keypointsFrame.toArray().Length < 4)
+        int primeKeypoints = keypointsPrime.toArray().Length;
+        int frameKeypoints = keypointsFrame.toArray().Length;
+        
+        if (primeKeypoints < 4 || frameKeypoints < 4)
         {
-            Debug.LogError("Not enough keypoints found for alignment. Need at least 4.");
-            return;
+            Debug.LogError($"Not enough keypoints. Prime: {primeKeypoints}, Frame: {frameKeypoints}");
+            return null;
         }
 
-        // Match features using BFMatcher
-        // Try: fully qualified NormTypes, or use 0 (HAMMING) going with second becuse error
-        // BFMatcher matcher = new BFMatcher(OpenCVForUnity.CoreModule.NormTypes_HAMMING2); 
-        //BFMatcher matcher = new BFMatcher(0); //Norm ORB
-
-        BFMatcher matcher = new BFMatcher(4); // 4 = L1 (for AKAZE)
+        // Match features using BFMatcher with L1 norm (for AKAZE)
+        BFMatcher matcher = new BFMatcher(4); // 4 = L1 norm
         MatOfDMatch matches = new MatOfDMatch();
         matcher.match(descriptorsPrime, descriptorsFrame, matches);
 
         // Find Homography
         List<DMatch> matchList = matches.toList();
+
+        if (matchList.Count < 4)
+        {
+            Debug.LogError($"Not enough matches! Found: {matchList.Count}");
+            return null;
+        }
+
+        // Sort and take top matches
+        matchList.Sort((a, b) => a.distance.CompareTo(b.distance));
+        int numGoodMatches = Mathf.Min(50, matchList.Count);
+
         List<Point> primePoints = new List<Point>();
         List<Point> framePoints = new List<Point>();
-
-        matchList.Sort((a, b) => a.distance.CompareTo(b.distance));
-        int numGoodMatches = Mathf.Min(10, matchList.Count);
-        
-        if (numGoodMatches < 4)
-        {
-            Debug.LogError("Not enough good matches to compute Homography. Found: " + numGoodMatches);
-            return;
-        }
 
         for (int i = 0; i < numGoodMatches; i++)
         {
@@ -116,7 +162,7 @@ public class ORBAlignment : MonoBehaviour
         if (homography.empty())
         {
             Debug.LogError("Homography calculation failed!");
-            return;
+            return null;
         }
 
         // Warp the video frame to match the prime image's dimensions
@@ -124,22 +170,17 @@ public class ORBAlignment : MonoBehaviour
         Size primeSize = primeMat.size();
         Imgproc.warpPerspective(frameMat, warpedFrame, homography, primeSize);
 
-        // Convert back to Texture2D using our own converter
+        // Convert back to Texture2D
         Texture2D resultTexture = Texture2DMatConverter.MatToTexture2D(warpedFrame);
 
         if (resultTexture == null)
         {
             Debug.LogError("Failed to convert warped Mat to Texture2D!");
-            return;
+            return null;
         }
 
-        // Display if assigned
-        if (displayImage != null)
-        {
-            displayImage.texture = resultTexture;
-        }
-
-        Debug.Log("Alignment complete! Warped texture is ready.");
+        Debug.Log($"Alignment complete! Result: {resultTexture.width}x{resultTexture.height}");
+        return resultTexture;
     }
 
     public void SetVideoFrame(Texture2D frame)

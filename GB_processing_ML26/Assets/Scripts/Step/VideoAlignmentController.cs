@@ -1,4 +1,4 @@
-using UnityEngine;
+/*using UnityEngine;
 using System.Collections;
 
 public class VideoAlignmentController : MonoBehaviour
@@ -87,4 +87,4 @@ public class VideoAlignmentController : MonoBehaviour
         Debug.Log("Video processing complete (Step 1 & 2 done). Ready for Step 3.");
         isProcessing = false;
     }
-}
+}*/

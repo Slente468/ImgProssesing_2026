@@ -1,5 +1,5 @@
-using UnityEngine;
-using Unity.Sentis;
+/*using UnityEngine;
+using Unity.InferenceEngine;
 
 public class TestSentis : MonoBehaviour
 {
@@ -12,3 +12,4 @@ public class TestSentis : MonoBehaviour
         testTensor.Dispose();
     }
 }
+*/

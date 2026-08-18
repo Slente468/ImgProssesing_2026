@@ -16,7 +16,7 @@ public class SemanticSegmentation : MonoBehaviour
     public RawImage zoneMapDisplay;
 
     [Header("Model Settings")]
-    public int inputWidth = 520;    // Model expects 520x520
+    public int inputWidth = 520;
     public int inputHeight = 520;
 
     [Header("Zone Colors")]
@@ -42,60 +42,34 @@ public class SemanticSegmentation : MonoBehaviour
     {
         Debug.Log($"Starting semantic segmentation with input size {inputWidth}x{inputHeight}...");
 
-        // Load the model
+        // 1. Load the model
         Model model = ModelLoader.Load(modelAsset);
-        LogModelInfo(model); // Debug: list all inputs and outputs
+        LogModelInfo(model);
 
-        // Create the worker
+        // 2. Create the worker
         worker = new Worker(model, BackendType.GPUCompute);
 
-        // Convert texture to tensor with correct format and size
+        // 3. Convert texture to tensor
         inputTensor = TextureToTensor(primeImage, inputWidth, inputHeight);
-
-        // Log the tensor shape for debugging
         Debug.Log($"Created tensor with shape: {inputTensor.shape}");
 
-        // Schedule inference
+        // 4. Schedule inference (non-blocking)
         worker.Schedule(inputTensor);
 
-        // Get output tensor (still on GPU)
-        Tensor<float> outputTensor = null;
+        // 5. Get the output tensor by index 0 - it's an integer tensor
+        Tensor<int> outputTensor = null;
 
-        // Try different output names
-        string[] possibleOutputNames = { "output", "output_0", "output_1", "out", "pred", "logits", "sigmoid", "softmax" };
-        foreach (string name in possibleOutputNames)
+        try
         {
-            try
+            outputTensor = worker.PeekOutput(0) as Tensor<int>;
+            if (outputTensor != null)
             {
-                outputTensor = worker.PeekOutput(name) as Tensor<float>;
-                if (outputTensor != null)
-                {
-                    Debug.Log($"Found output tensor with name: '{name}'");
-                    break;
-                }
-            }
-            catch
-            {
-                // Ignore - try the next name
+                Debug.Log("Found output tensor by index 0 as Int");
             }
         }
-
-        // If none of the above work, try getting the first output by index
-        if (outputTensor == null)
+        catch (System.Exception e)
         {
-            try
-            {
-                Debug.Log("Trying to get the first output by index (0)...");
-                outputTensor = worker.PeekOutput(0) as Tensor<float>;
-                if (outputTensor != null)
-                {
-                    Debug.Log("Found output tensor by index 0");
-                }
-            }
-            catch
-            {
-                // Ignore
-            }
+            Debug.LogWarning($"Trying index 0 failed: {e.Message}");
         }
 
         if (outputTensor == null)
@@ -104,106 +78,86 @@ public class SemanticSegmentation : MonoBehaviour
             return;
         }
 
-        // Readback data from GPU to CPU
-        using (Tensor<float> cpuCopy = outputTensor.ReadbackAndClone() as Tensor<float>)
-        {
-            if (cpuCopy == null)
-            {
-                Debug.LogError("Failed to readback tensor data!");
-                return;
-            }
+        // 6. Download the data to a CPU array (blocks until inference is complete)
+        int[] data = outputTensor.DownloadToArray();
 
-            // Convert to zone map
-            zoneMapTexture = TensorToZoneMap(cpuCopy, zoneColors);
-        }
+        // 7. Convert the data to a zone map
+        zoneMapTexture = TensorToZoneMapFromIntArray(data, outputTensor.shape, zoneColors);
 
         // Display the zone map
         if (zoneMapDisplay != null)
             zoneMapDisplay.texture = zoneMapTexture;
 
         Debug.Log($"Semantic segmentation complete! Zone map: {zoneMapTexture.width}x{zoneMapTexture.height}");
-
-        // Clean up
-        outputTensor.Dispose();
     }
 
     private void LogModelInfo(Model model)
     {
-        // Log all model inputs
         Debug.Log("=== Model Inputs ===");
         foreach (var input in model.inputs)
-        {
-            Debug.Log($"Input: {input.name} - Shape: {input.shape}");
-        }
+            Debug.Log($"Input: {input.name}");
 
-        // Log all model outputs
         Debug.Log("=== Model Outputs ===");
         foreach (var output in model.outputs)
-        {
-            // In Sentis 2.6.1, output.name is a string and output.shape is a TensorShape
-            Debug.Log($"Output: {output.name} - Shape: {output.shape}");
-        }
+            Debug.Log($"Output: {output.name} (Index: {output.index})");
 
-        // Log all model layers (first 10 only to avoid spam)
         Debug.Log("=== Model Layers (first 10) ===");
         int count = 0;
         foreach (var layer in model.layers)
         {
             if (count < 10)
-            {
-                // Layer doesn't have a Name property - use GetType().Name
                 Debug.Log($"Layer {count}: {layer.GetType().Name}");
-            }
             count++;
         }
         if (count > 10)
             Debug.Log($"... and {count - 10} more layers");
     }
 
-    private Tensor<float> TextureToTensor(Texture2D texture, int targetWidth, int targetHeight)
+    private void ListAvailableOutputs()
     {
-        // Force resize to exactly the target dimensions
-        Texture2D resizedTexture = ResizeTexture(texture, targetWidth, targetHeight);
-        
-        // Verify the resize worked
-        if (resizedTexture.width != targetWidth || resizedTexture.height != targetHeight)
+        Debug.Log("=== Available Outputs ===");
+        int index = 0;
+        while (true)
         {
-            Debug.LogError($"Resize failed! Expected {targetWidth}x{targetHeight}, got {resizedTexture.width}x{resizedTexture.height}");
+            try
+            {
+                var output = worker.PeekOutput(index);
+                if (output == null)
+                    break;
+                Debug.Log($"Output Index {index}: {output}");
+                index++;
+            }
+            catch
+            {
+                break;
+            }
         }
-
-        Color[] pixels = resizedTexture.GetPixels();
-        
-        // For NCHW format: [Batch, Channels, Height, Width]
-        float[] pixelData = new float[pixels.Length * 3];
-        
-        int numPixels = pixels.Length;
-        
-        // Separate channels for NCHW format
-        for (int i = 0; i < numPixels; i++)
-        {
-            pixelData[i] = pixels[i].r;                 // R channel
-            pixelData[i + numPixels] = pixels[i].g;      // G channel
-            pixelData[i + numPixels * 2] = pixels[i].b;  // B channel
-        }
-        
-        // NCHW format: [Batch, Channels, Height, Width]
-        int[] shape = new int[] { 1, 3, targetHeight, targetWidth };
-        Tensor<float> tensor = new Tensor<float>(new TensorShape(shape), pixelData);
-        
-        return tensor;
     }
 
-    private Texture2D TensorToZoneMap(Tensor<float> tensor, List<Color> colors)
+    private Tensor<float> TextureToTensor(Texture2D texture, int targetWidth, int targetHeight)
     {
-        // Download data from tensor
-        float[] data = tensor.DownloadToArray();
+        Texture2D resizedTexture = ResizeTexture(texture, targetWidth, targetHeight);
+        Color[] pixels = resizedTexture.GetPixels();
+        float[] pixelData = new float[pixels.Length * 3];
+        int numPixels = pixels.Length;
 
-        // Output is in NCHW format: [Batch, Channels, Height, Width]
-        int height = (int)tensor.shape[2];
-        int width = (int)tensor.shape[3];
-        int numClasses = (int)tensor.shape[1];
+        for (int i = 0; i < numPixels; i++)
+        {
+            pixelData[i] = pixels[i].r;
+            pixelData[i + numPixels] = pixels[i].g;
+            pixelData[i + numPixels * 2] = pixels[i].b;
+        }
 
-        Debug.Log($"Output tensor shape: {width}x{height}x{numClasses} classes");
+        int[] shape = new int[] { 1, 3, targetHeight, targetWidth };
+        return new Tensor<float>(new TensorShape(shape), pixelData);
+    }
+
+    private Texture2D TensorToZoneMapFromIntArray(int[] data, TensorShape shape, List<Color> colors)
+    {
+        int height = (int)shape[1];
+        int width = (int)shape[2];
+
+        Debug.Log($"Output tensor shape: {width}x{height} (integer class indices)");
 
         Texture2D zoneMap = new Texture2D(width, height, TextureFormat.ARGB32, false);
         Color[] pixels = new Color[width * height];
@@ -213,22 +167,12 @@ public class SemanticSegmentation : MonoBehaviour
             for (int x = 0; x < width; x++)
             {
                 int pixelIndex = y * width + x;
-                int classIndex = 0;
-                float maxScore = float.MinValue;
+                int classIndex = data[pixelIndex];
 
-                // For NCHW format, class scores are at: [batch, class, y, x]
-                for (int c = 0; c < numClasses; c++)
-                {
-                    int dataIndex = c * height * width + y * width + x;
-                    float score = data[dataIndex];
-                    if (score > maxScore)
-                    {
-                        maxScore = score;
-                        classIndex = c;
-                    }
-                }
+                if (classIndex < 0) classIndex = 0;
+                if (classIndex >= colors.Count) classIndex = colors.Count - 1;
 
-                pixels[pixelIndex] = classIndex < colors.Count ? colors[classIndex] : Color.white;
+                pixels[pixelIndex] = colors[classIndex];
             }
         }
 
@@ -239,23 +183,18 @@ public class SemanticSegmentation : MonoBehaviour
 
     private Texture2D ResizeTexture(Texture2D source, int targetWidth, int targetHeight)
     {
-        // Create a temporary RenderTexture
         RenderTexture rt = RenderTexture.GetTemporary(targetWidth, targetHeight, 0, RenderTextureFormat.ARGB32);
-        
-        // Copy the source texture to the RenderTexture
         Graphics.Blit(source, rt);
-        
-        // Read back from the RenderTexture to a new Texture2D
+
         RenderTexture previous = RenderTexture.active;
         RenderTexture.active = rt;
-        
+
         Texture2D result = new Texture2D(targetWidth, targetHeight, TextureFormat.ARGB32, false);
         result.ReadPixels(new Rect(0, 0, targetWidth, targetHeight), 0, 0);
         result.Apply();
-        
+
         RenderTexture.active = previous;
         RenderTexture.ReleaseTemporary(rt);
-        
         return result;
     }
 
@@ -263,27 +202,13 @@ public class SemanticSegmentation : MonoBehaviour
     {
         zoneColors = new List<Color>()
         {
-            new Color(0, 0, 0, 1),       // 0: Background
-            new Color(0, 0, 1, 1),       // 1: Aeroplane
-            new Color(0, 1, 0, 1),       // 2: Bicycle
-            new Color(0, 1, 1, 1),       // 3: Bird
-            new Color(1, 0, 0, 1),       // 4: Boat
-            new Color(1, 0, 1, 1),       // 5: Bottle
-            new Color(1, 1, 0, 1),       // 6: Bus
-            new Color(1, 1, 1, 1),       // 7: Car
-            new Color(0.5f, 0, 0, 1),    // 8: Cat
-            new Color(0.5f, 0, 0.5f, 1), // 9: Chair
-            new Color(0.5f, 0.5f, 0, 1), // 10: Cow
-            new Color(0, 0.5f, 0, 1),    // 11: Dining Table
-            new Color(0, 0.5f, 0.5f, 1), // 12: Dog
-            new Color(0, 0, 0.5f, 1),    // 13: Horse
-            new Color(0.5f, 0.5f, 0.5f, 1), // 14: Motorbike
-            new Color(0.75f, 0.25f, 0, 1),  // 15: Person
-            new Color(0.25f, 0.75f, 0, 1),  // 16: Potted Plant
-            new Color(0.75f, 0, 0.25f, 1),  // 17: Sheep
-            new Color(0.25f, 0, 0.75f, 1),  // 18: Sofa
-            new Color(0, 0.75f, 0.25f, 1),  // 19: Train
-            new Color(0.75f, 0.25f, 0.75f, 1), // 20: TV
+            new Color(0, 0, 0, 1), new Color(0, 0, 1, 1), new Color(0, 1, 0, 1),
+            new Color(0, 1, 1, 1), new Color(1, 0, 0, 1), new Color(1, 0, 1, 1),
+            new Color(1, 1, 0, 1), new Color(1, 1, 1, 1), new Color(0.5f, 0, 0, 1),
+            new Color(0.5f, 0, 0.5f, 1), new Color(0.5f, 0.5f, 0, 1), new Color(0, 0.5f, 0, 1),
+            new Color(0, 0.5f, 0.5f, 1), new Color(0, 0, 0.5f, 1), new Color(0.5f, 0.5f, 0.5f, 1),
+            new Color(0.75f, 0.25f, 0, 1), new Color(0.25f, 0.75f, 0, 1), new Color(0.75f, 0, 0.25f, 1),
+            new Color(0.25f, 0, 0.75f, 1), new Color(0, 0.75f, 0.25f, 1), new Color(0.75f, 0.25f, 0.75f, 1)
         };
     }
 

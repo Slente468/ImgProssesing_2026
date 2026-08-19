@@ -11,11 +11,15 @@ public class TwoFrameAlignment : MonoBehaviour
 
     [Header("Display")]
     public RawImage resultImage;        // Final mask
-    public RawImage debugFirstImage;    // NEW: Show warped first frame
-    public RawImage debugLastImage;     // NEW: Show warped last frame
+    public RawImage debugFirstImage;    // Show warped first frame
+    public RawImage debugLastImage;     // Show warped last frame
 
     [Header("Settings")]
     public float subtractionThreshold = 0.1f;
+
+    [Header("Drawing Mask Output")]
+    [Tooltip("The extracted drawing mask (black background, white lines). Drag this into DrawingCoordinateExtractor.")]
+    public Texture2D drawingMask;       // <-- ADDED: Exposes the mask
 
     void Start()
     {
@@ -67,12 +71,12 @@ public class TwoFrameAlignment : MonoBehaviour
 
         // Subtract
         Debug.Log("Subtracting images...");
-        Texture2D drawingMask = SubtractImages(warpedFirst, warpedLast);
+        drawingMask = SubtractImages(warpedFirst, warpedLast); // <-- STORE THE MASK
 
         if (resultImage != null)
             resultImage.texture = drawingMask;
 
-        Debug.Log("Two-Frame Alignment complete!");
+        Debug.Log("Two-Frame Alignment complete! Drawing mask is ready for coordinate extraction.");
     }
 
     private Texture2D SubtractImages(Texture2D clean, Texture2D drawn)

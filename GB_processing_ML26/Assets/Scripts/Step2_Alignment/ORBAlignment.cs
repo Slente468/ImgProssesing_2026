@@ -88,7 +88,7 @@ public class ORBAlignment : MonoBehaviour
 
     Debug.Log("Starting alignment...");
 
-    // Convert using our own converter
+    // Convert using our own converter (bc unity were shit ånd so wås the OPenCV thing (skill issue))
     Mat primeMat = Texture2DMatConverter.Texture2DToMat(primeImage);
     Mat frameMat = Texture2DMatConverter.Texture2DToMat(inputFrame);
 
@@ -114,7 +114,7 @@ public class ORBAlignment : MonoBehaviour
     Imgproc.cvtColor(primeMat, primeGray, Imgproc.COLOR_BGR2GRAY);
     Imgproc.cvtColor(frameMat, frameGray, Imgproc.COLOR_BGR2GRAY);
 
-    // --- OPTIONAL: Add CLAHE for contrast enhancement ---
+    // --- OPTIONAL? MORE LIKE NEED: Add CLAHE for contrast enhancement ---
     CLAHE clahe = Imgproc.createCLAHE(2.0, new Size(8, 8));
     Mat primeEnhanced = new Mat();
     Mat frameEnhanced = new Mat();
@@ -124,7 +124,7 @@ public class ORBAlignment : MonoBehaviour
     primeGray = primeEnhanced;
     frameGray = frameEnhanced;
 
-    // AKAZE feature detector
+    // AKAZE feature detector (used ORB before)
     AKAZE akaze = AKAZE.create();
     MatOfKeyPoint keypointsPrime = new MatOfKeyPoint();
     MatOfKeyPoint keypointsFrame = new MatOfKeyPoint();
@@ -176,7 +176,7 @@ public class ORBAlignment : MonoBehaviour
     primePointsMat.fromList(primePoints);
     framePointsMat.fromList(framePoints);
 
-    // --- FIX: Correct Homography order (frame → prime) ---
+    // --- FIX: Correct Homography order (frame → prime) (this one is påin)---
     Mat homography = Calib3d.findHomography(framePointsMat, primePointsMat, Calib3d.RANSAC, 3.0);
 
     if (homography.empty())

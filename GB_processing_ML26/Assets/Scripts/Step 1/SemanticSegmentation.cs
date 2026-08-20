@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using Unity.InferenceEngine;
 using System.Collections.Generic;
+using System.IO;
 
 public class SemanticSegmentation : MonoBehaviour
 {
@@ -213,6 +214,35 @@ public class SemanticSegmentation : MonoBehaviour
     }
 
     public Texture2D GetZoneMap() => zoneMapTexture;
+
+    // ============================================================
+    // SAVE ZONE MAP AS PNG - SINGLE CLEAN VERSION
+    // ============================================================
+    public void SaveZoneMapAsPNG(string customFilename = "")
+    {
+        if (zoneMapTexture == null)
+        {
+            Debug.LogError("❌ No zone map to save! Run segmentation first.");
+            return;
+        }
+
+        string folderPath = Path.Combine(Application.dataPath, "Data/Segmentation/");
+        if (!Directory.Exists(folderPath))
+            Directory.CreateDirectory(folderPath);
+
+        string filename = string.IsNullOrEmpty(customFilename) ? "zone_map" : customFilename;
+        // Make sure filename is safe
+        string safeFilename = string.Join("_", filename.Split(Path.GetInvalidFileNameChars()));
+        string filePath = Path.Combine(folderPath, safeFilename + ".png");
+
+        byte[] bytes = zoneMapTexture.EncodeToPNG();
+        File.WriteAllBytes(filePath, bytes);
+        Debug.Log($"✅ Semantic Zone Map saved to: {filePath}");
+
+        #if UNITY_EDITOR
+        UnityEditor.AssetDatabase.Refresh();
+        #endif
+    }
 
     void OnDestroy()
     {

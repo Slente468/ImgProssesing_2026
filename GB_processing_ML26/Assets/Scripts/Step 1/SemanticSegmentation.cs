@@ -4,6 +4,7 @@ using Unity.InferenceEngine;
 using System.Collections.Generic;
 using System.IO;
 
+  
 public class SemanticSegmentation : MonoBehaviour
 {
     [Header("References")]
@@ -199,19 +200,74 @@ public class SemanticSegmentation : MonoBehaviour
         return result;
     }
 
-    private void InitializeZoneColors()
+   private void InitializeZoneColors()
+{
+    zoneColors = new List<Color>()
     {
-        zoneColors = new List<Color>()
-        {
-            new Color(0, 0, 0, 1), new Color(0, 0, 1, 1), new Color(0, 1, 0, 1),
-            new Color(0, 1, 1, 1), new Color(1, 0, 0, 1), new Color(1, 0, 1, 1),
-            new Color(1, 1, 0, 1), new Color(1, 1, 1, 1), new Color(0.5f, 0, 0, 1),
-            new Color(0.5f, 0, 0.5f, 1), new Color(0.5f, 0.5f, 0, 1), new Color(0, 0.5f, 0, 1),
-            new Color(0, 0.5f, 0.5f, 1), new Color(0, 0, 0.5f, 1), new Color(0.5f, 0.5f, 0.5f, 1),
-            new Color(0.75f, 0.25f, 0, 1), new Color(0.25f, 0.75f, 0, 1), new Color(0.75f, 0, 0.25f, 1),
-            new Color(0.25f, 0, 0.75f, 1), new Color(0, 0.75f, 0.25f, 1), new Color(0.75f, 0.25f, 0.75f, 1)
-        };
-    }
+        // Index 0:  Background / Void (Black)
+        new Color(0, 0, 0, 1),
+        
+        // Index 1:  Person / People (Blue)
+        new Color(0, 0, 1, 1),
+        
+        // Index 2:  Nature / Trees / Grass / Plants (Green)
+        new Color(0, 1, 0, 1),
+        
+        // Index 3:  Sky / Water (Cyan)
+        new Color(0, 1, 1, 1),
+        
+        // Index 4:  House / Building / Man-made Structure (Red)
+        new Color(1, 0, 0, 1),
+        
+        // Index 5:  Bicycle (Magenta)
+        new Color(1, 0, 1, 1),
+        
+        // Index 6:  Vehicle / Car / Bus / Train (Yellow)
+        new Color(1, 1, 0, 1),
+        
+        // Index 7:  Aeroplane (White)
+        new Color(1, 1, 1, 1),
+        
+        // Index 8:  Dog (Dark Red)
+        new Color(0.5f, 0, 0, 1),
+        
+        // Index 9:  Cat (Dark Purple)
+        new Color(0.5f, 0, 0.5f, 1),
+        
+        // Index 10: Chair / Sofa (Olive)
+        new Color(0.5f, 0.5f, 0, 1),
+        
+        // Index 11: Potted Plant / Flowers (Dark Green)
+        new Color(0, 0.5f, 0, 1),
+        
+        // Index 12: Bottle (Dark Cyan)
+        new Color(0, 0.5f, 0.5f, 1),
+        
+        // Index 13: Dining Table / Furniture (Dark Blue)
+        new Color(0, 0, 0.5f, 1),
+        
+        // Index 14: Cow (Gray)
+        new Color(0.5f, 0.5f, 0.5f, 1),
+        
+        // Index 15: Horse (Brown)
+        new Color(0.75f, 0.25f, 0, 1),
+        
+        // Index 16: Sheep (Light Green)
+        new Color(0.25f, 0.75f, 0, 1),
+        
+        // Index 17: Sofa / Couch (Pinkish Red)
+        new Color(0.75f, 0, 0.25f, 1),
+        
+        // Index 18: Train (Indigo)
+        new Color(0.25f, 0, 0.75f, 1),
+        
+        // Index 19: TV / Monitor (Teal)
+        new Color(0, 0.75f, 0.25f, 1),
+        
+        // Index 20: Motorbike (Light Purple)
+        new Color(0.75f, 0.25f, 0.75f, 1)
+    };
+}
 
     public Texture2D GetZoneMap() => zoneMapTexture;
 

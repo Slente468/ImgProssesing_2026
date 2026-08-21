@@ -88,7 +88,7 @@ public class ORBAlignment : MonoBehaviour
 
     Debug.Log("Starting alignment...");
 
-    // Convert using our own converter (bc unity were shit ånd so wås the OPenCV thing (skill issue))
+    // Convert using our own converter (bc unity were difficult ånd so wås the OPenCV thing (skill issue))
     Mat primeMat = Texture2DMatConverter.Texture2DToMat(primeImage);
     Mat frameMat = Texture2DMatConverter.Texture2DToMat(inputFrame);
 
@@ -210,4 +210,5 @@ public class ORBAlignment : MonoBehaviour
         videoFrame = frame;
         AlignImages();
     }
+    
 }
